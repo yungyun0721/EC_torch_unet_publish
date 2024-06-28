@@ -1,6 +1,5 @@
 torch 與 CUDA對應版本
 https://pytorch.org/get-started/previous-versions/
-12345
 
 資料位置： /wk171/yungyun/EC_downscaling_code/EC_torch_unet
 ## Requirements
