@@ -1,0 +1,49 @@
+experiment_name: EC_unet_downscaling_5km_OK
+template:
+  sub_exp_name: EC_unet_try1
+  rainfall_downscaling: EC_unet_5km
+  data:
+    data_folder: '/bk2/yungyun/EC_downscaling/input_dataset/windy_EC_5km/windy_EC_total.h5' ## h5file data folder
+    batch_size: 20
+    shuffle_buffer: 1000
+    data_channel: 1
+
+  train_rainfall:
+    max_epoch: 200
+    evaluate_freq: 1
+    loss_function: WMSE
+    loss_ratio:
+      rain_gate_2: 20
+      rain_gate_2_5: 2
+      rain_gate_5_10: 5
+      rain_gate_10_30: 10
+      rain_gate_30: 30
+    optim_setting:
+      lr: 0.0002
+      betas1: 0.5
+      betas2: 0.999
+      eps: 0.00000001
+    plot_windy_size: '5km'
+
+sub_experiments:
+- sub_exp_name: EC_unet_try2
+  #data:
+    #valid_profile_only: yes
+    #valid_image_only: yes
+  train_rainfall:
+    optim_setting:
+      lr: 0.0002
+      betas1: 0.5
+      betas2: 0.99
+      eps: 0.00000001
+
+- sub_exp_name: EC_unet_try3
+  #data:
+    #valid_profile_only: yes
+    #valid_image_only: yes
+  train_rainfall:
+    optim_setting:
+      lr: 0.0002
+      betas1: 0.5
+      betas2: 0.9
+      eps: 0.00000001
