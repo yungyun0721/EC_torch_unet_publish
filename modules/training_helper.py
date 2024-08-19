@@ -1,33 +1,29 @@
 import torch
 import numpy as np
-import h5py
-import pandas as pd
-# from modules.plot_generator import plot_windy,plot_windy_5km
-from modules.plot_generator_swin import plot_windy,plot_windy_5km
+import os
+import netCDF4 as nc
+from modules.plot_generator import plot_windy
 
+
+def remove_outlier_and_nan(numpy_array, upper_bound=1000):
+    numpy_array = np.nan_to_num(numpy_array, copy=False)
+    # numpy_array[numpy_array > upper_bound] = 0
+    return numpy_array
 
 def output_sample_rainfall_chart(model, sample_data, summary_writer, epoch_index,plot_windy_size, device):
     model.eval()
-    for phase, (sample_windy_EC, sample_rainfall, sample_time) in sample_data.items():
-        sample_windy_EC, sample_rainfall = sample_windy_EC.to(device), sample_rainfall.to(device)
-        pred_rainfall = model(sample_windy_EC)
+    for phase, (sample_images, sample_rainfall, sample_time) in sample_data.items():
+        sample_images, sample_rainfall = sample_images.to(device), sample_rainfall.to(device)
+        pred_rainfall = model(sample_images)
         charts = []
-        # Assuming sample_windy_EC and pred_rainfall are 4D tensors (B, C, H, W)
-        sample_windy_EC = sample_windy_EC.mean(dim=1)
-        pred_rainfall = pred_rainfall.mean(dim=1)
-        sample_windy_EC = sample_windy_EC.cpu()
+        # Assuming sample_images and pred_rainfall are 4D tensors (B, C, H, W)
+        sample_images = sample_images.cpu()
         pred_rainfall = pred_rainfall.cpu()
         sample_rainfall = sample_rainfall.cpu()
-        if plot_windy_size=='5km':
-            for i in range(2):
-                charts.append(
-                    plot_windy_5km(sample_windy_EC[i], pred_rainfall[i], sample_rainfall[i], sample_time[i])
-                )
-        elif plot_windy_size=='1.25km':
-            for i in range(2):
-                charts.append(
-                    plot_windy(sample_windy_EC[i], pred_rainfall[i], sample_rainfall[i], sample_time[i])
-                )
+        for i in range(2):
+            charts.append(
+                plot_windy(sample_images[i], pred_rainfall[i], sample_rainfall[i], sample_time[i])
+            )
 
         chart_matrix = np.stack(charts).astype(np.int_)
         chart_matrix = chart_matrix[:,:,:,:-1]
@@ -43,15 +39,14 @@ def output_sample_rainfall_chart(model, sample_data, summary_writer, epoch_index
 
         
 def get_sample_data(dataset, count):
-    for batch_index, (windy_EC, rainfall, time_train) in enumerate(dataset):
-        valid_rain = rainfall[:, 0, 0] != -999
-        sample_windy_EC = windy_EC[valid_rain][:count, ...]
+    for batch_index, (images, rainfall, time_train) in enumerate(dataset):
+        valid_rain = rainfall[:, 0, 0, 0] != -999
+        sample_images = images[valid_rain][:count, ...]
         sample_rainfall = rainfall[valid_rain][:count, ...]
         sample_time = time_train[valid_rain][:count, ...]
-        return sample_windy_EC, sample_rainfall, sample_time
+        return sample_images, sample_rainfall, sample_time
     
 def cost_loss_weighting_mse_hand(y_true, y_pred, loss_ratio):
-    y_pred = torch.mean(y_pred, dim=1)
     w00 = torch.tensor((y_true < 2).float()) * loss_ratio.get('rain_gate_2', 0.0)
     w01 = torch.tensor(((y_true > 2) & (y_true <= 5)).float()) * loss_ratio.get('rain_gate_2_5', 0.0)
     w02 = torch.tensor(((y_true > 5) & (y_true <= 10)).float()) * loss_ratio.get('rain_gate_5_10', 0.0)
@@ -69,9 +64,9 @@ def evaluate_loss(model, dataset, loss_ratio, device):
     avg_rainfall_loss = 0
     model.eval()
     with torch.no_grad():
-        for batch_index, (windy_EC, rainfall, times_train) in enumerate(dataset):
-            windy_EC, rainfall = windy_EC.to(device), rainfall.to(device)
-            pred_rainfall = model(windy_EC)
+        for batch_index, (images, rainfall, times_train) in enumerate(dataset):
+            images, rainfall = images.to(device), rainfall.to(device)
+            pred_rainfall = model(images)
             batch_rainfall_loss = cost_loss_weighting_mse_hand(rainfall, pred_rainfall, loss_ratio)
             # batch_rainfall_loss = loss_basic(rainfall, torch.mean(pred_rainfall, dim=1)) 
             avg_rainfall_loss += batch_rainfall_loss.item()
@@ -80,142 +75,78 @@ def evaluate_loss(model, dataset, loss_ratio, device):
 
     return rainfall_loss
 
-def get_torch_datasets(data_folder, batch_size, shuffle_buffer,data_channel):
-    start_lat = 4
-    end_lat = -4
+def get_torch_datasets(data_folder, data_time_arg, batch_size, data_channel):
     datasets = dict()
     print('data preparing...')
-    with h5py.File(data_folder, 'r') as hf:
-        combine_QPE_rain_3hr_read = hf['QPE_rain_3hr'][:]
-        combine_QPE_rain_24hr_read = hf['QPE_rain_24hr_label'][:]
-    datetime_old = pd.read_hdf(data_folder, keys='Time', mode='r')
 
-    total_size =len(combine_QPE_rain_24hr_read[:,0,0])
-    train_index = [x for x in range(total_size) if (x+1)%5 ==1 or (x+1)%5 ==2 or (x+1)%5 ==4]
-    vaild_index = [x for x in range(total_size) if (x+1)%5 ==3]
-    test_index  = [x for x in range(total_size) if (x+1)%5 ==0]
+    # load and combine data
+    combine_time_data  = []
+
+    train_year = os.listdir(data_folder['input'])
+    train_year.sort()
+    for year_i in train_year:
+        input_files = os.listdir(data_folder['input']+year_i)
+        input_files.sort()
+        for file in input_files:
+            input_tmp = nc.Dataset(data_folder['input']+year_i+'/'+file)
+            time_tmp = input_tmp.variables['time'][:]+np.int_(file[2:-3])*1000
+            time_tmp = list(map(str, time_tmp))
+            input_data = input_tmp.variables['Himawari_images'][:]
+            label_tmp = nc.Dataset(data_folder['label']+year_i+'/'+file)
+            label_data = label_tmp.variables['qperr'][:]
+            if year_i == train_year[0] and file == input_files[0]:
+                combine_input_data = input_data
+                combine_label_data = label_data
+            else:
+                combine_input_data = np.concatenate((combine_input_data, input_data), axis=0)
+                combine_label_data = np.concatenate((combine_label_data, label_data), axis=0)
+            combine_time_data = combine_time_data+time_tmp
+        print(f'finish {year_i}------------------')
+    print('finish data loading-----------------')
+    data_channel = [data_channel_index-1 for data_channel_index in data_channel]
+    combine_input_data = remove_outlier_and_nan(combine_input_data)[:,:-1,:,:][:,:,:-1,:][:,:,:,data_channel]
+    combine_label_data = remove_outlier_and_nan(combine_label_data)[:,:-1,:,:][:,:,:-1,:]
+ 
+    # divide train, valid, test year    
+    valid_back = [year_i[-2:] for year_i in data_time_arg['data_valid']]
+    test_back  = [year_i[-2:] for year_i in data_time_arg['data_test']]
+    valid_index = []
+    test_index = []
+    train_index = []
+    for index_i in range(len(combine_time_data)):
+        if combine_time_data[index_i][:2] in valid_back:
+            valid_index = valid_index+[index_i]
+        elif combine_time_data[index_i][:2] in test_back:
+            test_index = test_index+[index_i]
+        else:
+            train_index = train_index+[index_i]
     
-    if shuffle_buffer == '2022':
-        total_size =len(combine_QPE_rain_24hr_read[:,0,0])
-        train_index = [x for x in range(total_size) if (x+1)%5 ==0 or (x+1)%5 ==1 or (x+1)%5 ==2 or (x+1)%5 ==4]
-        vaild_index = [x for x in range(total_size) if (x+1)%5 ==3]
-        test_index  = [x for x in range(total_size) if (x+1)%5 ==0]
+    print(f"valid year: {data_time_arg['data_valid']} numbers: {len(valid_index)}")
+    print(f"test year: {data_time_arg['data_test']} numbers: {len(test_index)}")
+    print(f"train year total numbers: {len(train_index)}")
+
+    combine_time_data = list(map(float, combine_time_data))
+    combine_time_data = list(map(int, combine_time_data))
     
-
-    if data_channel == 8:
-        print('data_channel=8')
-        data_train = combine_QPE_rain_3hr_read[train_index,:,start_lat:end_lat,:]
-        data_label = combine_QPE_rain_24hr_read[train_index,:,start_lat:end_lat]
-        data_time_train = [datetime_old.datetime_start_LST[i] for i in train_index]
-        data_valid = combine_QPE_rain_3hr_read [vaild_index,:,start_lat:end_lat,:]
-        data_valid_label = combine_QPE_rain_24hr_read [vaild_index,:,start_lat:end_lat]
-        data_time_valid = [datetime_old.datetime_start_LST[i] for i in vaild_index]
-        data_test = combine_QPE_rain_3hr_read [test_index,:,start_lat:end_lat,:]
-        data_test_label = combine_QPE_rain_24hr_read [test_index,:,start_lat:end_lat]
-        data_time_test = [datetime_old.datetime_start_LST[i] for i in test_index]
+    input_data_train = torch.from_numpy(np.swapaxes(np.swapaxes(combine_input_data[train_index,:,:,:],2,3),1,2).astype('float32'))
+    input_data_valid = torch.from_numpy(np.swapaxes(np.swapaxes(combine_input_data[valid_index,:,:,:],2,3),1,2).astype('float32'))
+    input_data_test  = torch.from_numpy(np.swapaxes(np.swapaxes(combine_input_data[test_index,:,:,:],2,3),1,2).astype('float32'))
     
-    elif data_channel==4:
-        print('data_channel=4')
-        data_train = np.zeros((len(train_index),112,104,4))
-        for i in range(4):
-            data_train[:,:,:,i] =np.sum(combine_QPE_rain_3hr_read[train_index,:,start_lat:end_lat,2*i:2*(i+1)],axis=3)
-        data_label = combine_QPE_rain_24hr_read[train_index,:,start_lat:end_lat]
-        data_time_train = [datetime_old.datetime_start_LST[i] for i in train_index]
-        
-        data_valid = np.zeros((len(vaild_index),112,104,4))
-        for i in range(4):
-            data_valid[:,:,:,i] =np.sum(combine_QPE_rain_3hr_read[vaild_index,:,start_lat:end_lat,2*i:2*(i+1)],axis=3)
-        data_valid_label = combine_QPE_rain_24hr_read [vaild_index,:,start_lat:end_lat]
-        data_time_valid = [datetime_old.datetime_start_LST[i] for i in vaild_index]
-        
-        data_test = np.zeros((len(test_index),112,104,4))
-        for i in range(4):
-            data_test[:,:,:,i] =np.sum(combine_QPE_rain_3hr_read[test_index,:,start_lat:end_lat,2*i:2*(i+1)],axis=3)
-        data_test_label = combine_QPE_rain_24hr_read [test_index,:,start_lat:end_lat]
-        data_time_test = [datetime_old.datetime_start_LST[i] for i in test_index]
+    label_data_train = torch.from_numpy(np.swapaxes(np.swapaxes(combine_label_data[train_index,:,:,:],2,3),1,2).astype('float32'))
+    label_data_valid = torch.from_numpy(np.swapaxes(np.swapaxes(combine_label_data[valid_index,:,:,:],2,3),1,2).astype('float32'))
+    label_data_test  = torch.from_numpy(np.swapaxes(np.swapaxes(combine_label_data[test_index,:,:,:],2,3),1,2).astype('float32'))
 
-    elif data_channel==1:
-        print('data_channel=1')
-        data_train = np.sum(combine_QPE_rain_3hr_read[train_index,:,start_lat:end_lat,:],axis=3, keepdims=True)
-        data_label = combine_QPE_rain_24hr_read[train_index,:,start_lat:end_lat]
-        data_time_train = [datetime_old.datetime_start_LST[i] for i in train_index]
-        data_valid = np.sum(combine_QPE_rain_3hr_read [vaild_index,:,start_lat:end_lat,:],axis=3, keepdims=True)
-        data_valid_label = combine_QPE_rain_24hr_read [vaild_index,:,start_lat:end_lat]
-        data_time_valid = [datetime_old.datetime_start_LST[i] for i in vaild_index]
-        data_test = np.sum(combine_QPE_rain_3hr_read [test_index,:,start_lat:end_lat,:],axis=3, keepdims=True)
-        data_test_label = combine_QPE_rain_24hr_read [test_index,:,start_lat:end_lat]
-        data_time_test = [datetime_old.datetime_start_LST[i] for i in test_index]
-                
+    times_train = torch.from_numpy(np.array(combine_time_data)[train_index].astype('int32'))
+    times_valid = torch.from_numpy(np.array(combine_time_data)[valid_index].astype('int32'))
+    times_test = torch.from_numpy(np.array(combine_time_data)[test_index].astype('int32'))
 
-    data_train = np.swapaxes(np.swapaxes(data_train,2,3),1,2)
-    data_valid = np.swapaxes(np.swapaxes(data_valid,2,3),1,2)
-    data_test  = np.swapaxes(np.swapaxes(data_test,2,3),1,2)
-
-    windy_EC_train = torch.from_numpy(data_train.astype('float32'))
-    QPESUMS_train = torch.from_numpy(data_label.astype('float32'))
-    times_train = torch.from_numpy(np.array(data_time_train).astype('int32'))
-
-    windy_EC_valid = torch.from_numpy(data_valid.astype('float32'))
-    QPESUMS_valid = torch.from_numpy(data_valid_label.astype('float32'))
-    times_valid = torch.from_numpy(np.array(data_time_valid).astype('int32'))
-    
-    windy_EC_test = torch.from_numpy(data_test.astype('float32'))
-    QPESUMS_test = torch.from_numpy(data_test_label.astype('float32'))
-    times_test = torch.from_numpy(np.array(data_time_test).astype('int32'))
-
-    train_dataset = torch.utils.data.TensorDataset(windy_EC_train, QPESUMS_train, times_train)
+    train_dataset = torch.utils.data.TensorDataset(input_data_train, label_data_train, times_train)
     datasets['train']  = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
-    valid_dataset = torch.utils.data.TensorDataset(windy_EC_valid, QPESUMS_valid, times_valid)
+    valid_dataset = torch.utils.data.TensorDataset(input_data_valid, label_data_valid, times_valid)
     datasets['valid']  = torch.utils.data.DataLoader(valid_dataset, batch_size=batch_size, shuffle=True)
 
-    test_dataset = torch.utils.data.TensorDataset(windy_EC_test, QPESUMS_test, times_test)
+    test_dataset = torch.utils.data.TensorDataset(input_data_test, label_data_test, times_test)
     datasets['test']  = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
 
     return datasets
-
-def get_torch_new_datasets(data_folder, batch_size, shuffle_buffer,data_channel):
-    datasets = dict()
-    f1 = h5py.File(data_folder+'2021/IFS_2021_1of2.h5')
-    f2 = h5py.File(data_folder+'2021/IFS_2021_2of2.h5')
-    f3 = h5py.File(data_folder+'2022/IFS_2022_1of2.h5')
-    precipitation1 = f1['Variables']['precipitation'][:]
-    precipitation2 = f2['Variables']['precipitation'][:]
-    precipitation3 = f3['Variables']['precipitation'][:]
-    target1 = f1['Variables']['target'][:]
-    target2 = f2['Variables']['target'][:]
-    target3 = f3['Variables']['target'][:]
-    time1 = f1['Coordinates']['time'][:]
-    time2 = f2['Coordinates']['time'][:]
-    time3 = f3['Coordinates']['time'][:]
-    
-    data_train = np.expand_dims(np.concatenate([precipitation1,precipitation2, precipitation3],axis=0),axis=1)
-    data_label = np.concatenate([target1,target2, target3],axis=0)
-    train_time_tmp = np.concatenate([time1,time2, time3],axis=0)
-    train_time = [np.int_(train_time_tmp[i][:4]+train_time_tmp[i][5:7]+train_time_tmp[i][8:10]+train_time_tmp[i][11:13]) for i in range(len(train_time_tmp))]
-    
-    # validation
-    f = h5py.File(data_folder+'2022/IFS_2022_2of2.h5')
-    data_valid = np.expand_dims(f['Variables']['precipitation'][:],axis=1)
-    data_valid_label = f['Variables']['target'][:]
-    valid_time_tmp = f['Coordinates']['time'][:]
-    valid_time = [np.int_(valid_time_tmp[i][:4]+valid_time_tmp[i][5:7]+valid_time_tmp[i][8:10]+valid_time_tmp[i][11:13]) for i in range(len(valid_time_tmp))]
-    
-    
-    windy_EC_train = torch.from_numpy(data_train.astype('float32'))
-    QPESUMS_train = torch.from_numpy(data_label.astype('float32'))
-    times_train = torch.from_numpy(np.array(train_time).astype('int32'))
-
-    windy_EC_valid = torch.from_numpy(data_valid.astype('float32'))
-    QPESUMS_valid = torch.from_numpy(data_valid_label.astype('float32'))
-    times_valid = torch.from_numpy(np.array(valid_time).astype('int32'))
-    
-    train_dataset = torch.utils.data.TensorDataset(windy_EC_train, QPESUMS_train, times_train)
-    datasets['train']  = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-
-    valid_dataset = torch.utils.data.TensorDataset(windy_EC_valid, QPESUMS_valid, times_valid)
-    datasets['valid']  = torch.utils.data.DataLoader(valid_dataset, batch_size=batch_size, shuffle=True)
-
-    return datasets
-
-    

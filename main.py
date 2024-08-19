@@ -3,9 +3,8 @@ import os
 import importlib
 import pandas as pd
 from modules.rainfall_downscaling_trainer import train_rainfall_downscaling
-from modules.training_helper import evaluate_loss, get_torch_datasets,get_torch_new_datasets
+from modules.training_helper import evaluate_loss, get_torch_datasets
 from modules.experiment_helper import parse_experiment_settings
-
 
 os.environ['CUDA_VISIBLE_DEVICES']="0"
 
@@ -28,15 +27,8 @@ def create_model_by_experiment_settings(experiment_settings):
     def create_model_instance(model_name):
         model_class = importlib.import_module(f'model_library.{model_name}').Model
         return model_class()
-
-    def create_model_instance_for_swin(model_name,model_setting):
-        model_class = importlib.import_module(f'model_library.{model_name}').Model
-        return model_class(**model_setting)
     
-    if 'swin' in experiment_settings['rainfall_downscaling']:
-        rainfall_downscaling = create_model_instance_for_swin(experiment_settings['rainfall_downscaling'],experiment_settings['model_setting'])    # choose profiler in model_library
-    else:
-        rainfall_downscaling = create_model_instance(experiment_settings['rainfall_downscaling'])    # choose profiler in model_library
+    rainfall_downscaling = create_model_instance(experiment_settings['rainfall_downscaling'])    # choose profiler in model_library
     
     # if load_from:
     #     rainfall_downscaling.load_weights(f'{load_from}')
@@ -69,10 +61,7 @@ def execute_sub_exp(sub_exp_settings, action, run_anyway):
 
     summary_writer_path = log_path
     model_save_path = prepare_model_save_path(experiment_name, sub_exp_name)
-    if sub_exp_settings['data']['data_channel']=='new':
-        datasets = get_torch_new_datasets(**sub_exp_settings['data'])
-    else:
-        datasets = get_torch_datasets(**sub_exp_settings['data'])
+    datasets = get_torch_datasets(**sub_exp_settings['data'])
 
     print('starting building...')
 

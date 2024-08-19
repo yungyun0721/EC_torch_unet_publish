@@ -6,7 +6,7 @@ class Model(nn.Module):
         super().__init__()
 
         # BatchNorm
-        self.input_norm = nn.BatchNorm2d(1)
+        self.input_norm = nn.BatchNorm2d(16)
         self.conv1_norm = nn.BatchNorm2d(64)
         self.conv2_norm = nn.BatchNorm2d(64)
         self.conv3_norm = nn.BatchNorm2d(128)
@@ -21,7 +21,7 @@ class Model(nn.Module):
         self.conv12_norm = nn.BatchNorm2d(4)
 
         # Conv layers
-        self.conv1 = nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=1)
+        self.conv1 = nn.Conv2d(16, 64, kernel_size=3, stride=1, padding=1)
         self.conv2 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1)
         self.conv3 = nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1)
         self.conv4 = nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1)
@@ -99,6 +99,6 @@ class Model(nn.Module):
         x = self.relu(c7)
         return x
 
-    def forward(self, windy_EC):
-        pred_rainfall = self.visual_layers(windy_EC)
+    def forward(self, images):
+        pred_rainfall = self.visual_layers(images)
         return pred_rainfall

@@ -1,5 +1,7 @@
 tmp.png
 logs
+plt_test/
+saved_models/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

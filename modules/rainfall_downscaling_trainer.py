@@ -37,11 +37,11 @@ def train_rainfall_downscaling(
     for epoch_index in range(1, max_epoch+1):
         print(f'Executing epoch #{epoch_index}')
         rainfall_downscaling.train()
-        for batch_index, (windy_EC, rainfall, times_train) in enumerate(datasets['train']):
-            windy_EC, rainfall = windy_EC.to(device), rainfall.to(device)
-            ## train_step(windy_EC, rainfall)
+        for batch_index, (images, rainfall, times_train) in enumerate(datasets['train']):
+            images, rainfall = images.to(device), rainfall.to(device)
+            ## train_step(images, rainfall)
             optimizer_DS_model.zero_grad()
-            pred_rainfall = rainfall_downscaling(windy_EC)
+            pred_rainfall = rainfall_downscaling(images)
             # rainfall_loss = loss_basic(rainfall, torch.mean(pred_rainfall, dim=1))
             rainfall_loss = cost_loss_weighting_mse_hand(rainfall, pred_rainfall, loss_ratio)
             rainfall_loss.backward()
@@ -76,7 +76,7 @@ def train_rainfall_downscaling(
             for phase in ['train', 'valid']:
                 rainfall_loss = evaluate_loss(rainfall_downscaling, datasets[phase], loss_ratio, device)
                 for name, loss in [('rainfall', rainfall_loss)]:
-                    summary_writer.add_scalar(f'[{phase}] windy_EC: {name}_loss', loss, epoch_index) 
+                    summary_writer.add_scalar(f'[{phase}] images: {name}_loss', loss, epoch_index) 
                 indicator_for_early_stop[phase] = rainfall_loss
             # save the best profiler and check for early stopping
             while valid_loss_stack and valid_loss_stack[-1] >= indicator_for_early_stop['valid']:

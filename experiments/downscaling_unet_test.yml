@@ -1,12 +1,16 @@
-experiment_name: EC_unet_downscaling_5km_OK
+experiment_name: downscaling_unet_test
 template:
-  sub_exp_name: EC_unet_try1
-  rainfall_downscaling: EC_unet_5km
+  sub_exp_name: unet_try1
+  rainfall_downscaling: Rain_unet
   data:
-    data_folder: '/bk2/yungyun/EC_downscaling/input_dataset/windy_EC_5km/windy_EC_total.h5' ## h5file data folder
+    data_folder: 
+      input: '/wk1/bcw817/data/Himawari-8/data_ready/Pacific/' ## h5file data folder
+      label: '/wk1/bcw817/data/Himawari-8/data_ready_qperr/Pacific/'
+    data_time_arg:
+      data_valid: ['2019','2021'] 
+      data_test: ['2023']
     batch_size: 20
-    shuffle_buffer: 1000
-    data_channel: 1
+    data_channel: [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]
 
   train_rainfall:
     max_epoch: 200
@@ -26,10 +30,7 @@ template:
     plot_windy_size: '5km'
 
 sub_experiments:
-- sub_exp_name: EC_unet_try2
-  #data:
-    #valid_profile_only: yes
-    #valid_image_only: yes
+- sub_exp_name: unet_try2
   train_rainfall:
     optim_setting:
       lr: 0.0002
@@ -37,10 +38,7 @@ sub_experiments:
       betas2: 0.99
       eps: 0.00000001
 
-- sub_exp_name: EC_unet_try3
-  #data:
-    #valid_profile_only: yes
-    #valid_image_only: yes
+- sub_exp_name: unet_try3
   train_rainfall:
     optim_setting:
       lr: 0.0002

@@ -24,7 +24,7 @@ To run the experiments, run this command:
 python main.py <experiment_path>
 
 Example:
-python main.py experiments/EC_unet_downscaling_5km_OK.yml 
+python main.py experiments/downscaling_unet_test.yml 
 ```
 目前設定使用0號gpu
 可由main.py 第10行更改
@@ -37,7 +37,7 @@ checking the GAN model training
 tensorboard --logdir=<log_path> --port=<four_numbers> --bind_all
 
 for example:
-tensorboard --logdir=/wk171/yungyun/EC_downscaling_code/EC_torch_unet_publish/logs --port=6526 --bind_all
+tensorboard --logdir=/wk171/yungyun/for_gitea_publish/EC_torch_unet_publish/logs --port=6526 --bind_all
 ```
 
 #### for perdict

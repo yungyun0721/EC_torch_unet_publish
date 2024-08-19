@@ -58,28 +58,28 @@ def plot_windy(data_train,preds_test,data_label,time):
     mpl.rc('axes', **axes)
     #ax.add_geometries(adm1_shapes, ccrs.PlateCarree(),
     #                  edgecolor='black', facecolor='gray', alpha=0.5)
-    latStart = 20.4-0.125; latEnd =26.8;#25.35
-    lonStart = 118-0.125; lonEnd = 123.5;
-    
-    lat_1km = np.linspace(latStart,latEnd,512)
-    lon_1km = np.linspace(lonStart,lonEnd,440)
-    lons, lats = np.meshgrid(lon_1km, lat_1km)
+    # Pracific
+    latStart = 23; latEnd =24.2375;#25.35
+    lonStart = 121.875; lonEnd = 123.1125
+    lat = np.linspace(latStart,latEnd,100)
+    lon = np.linspace(lonStart,lonEnd,100)
+    lons, lats = np.meshgrid(lon, lat)
     plt.figure(figsize=(18,6))
     plt.suptitle(time)
     plt.rcParams['font.sans-serif'] = ['Microsoft JhengHei'] 
     ax1 = plt.subplot(1, 3, 1)
     # ax1 = plt.axes(projection=ccrs.PlateCarree())
     # ss = np.sum(data_train,axis=2)
-    filled_c = ax1.contourf(lons, lats, data_train, levels=clevel, norm=norm,cmap=precip_colormap,linesytles=None)
+    filled_c = ax1.contourf(lons, lats, data_train[15,:,:], levels=np.linspace(200,300,21),cmap='gray',linesytles=None)
  
     ax1.set_xticks(np.arange(120, 123))
     ax1.set_yticks(np.arange(22, 26))
-    ax1.set_title('windy_EC')
+    ax1.set_title('Himawari_images')
     ax1.tick_params('both', labelsize=16)
 
     
     ax2 = plt.subplot(1, 3, 2)
-    filled_c = ax2.contourf(lons, lats, preds_test.detach().numpy()  ,levels=clevel, norm=norm,cmap=precip_colormap,linesytles=None)    #
+    filled_c = ax2.contourf(lons, lats, preds_test.detach().numpy()[0,:,:],levels=clevel, norm=norm,cmap=precip_colormap,linesytles=None)    #
     ax2.set_xticks(np.arange(120, 123))
     ax2.set_yticks(np.arange(22, 26))
     ax2.set_title('pred_rainfall')
@@ -88,62 +88,7 @@ def plot_windy(data_train,preds_test,data_label,time):
     
     
     ax3 = plt.subplot(1, 3, 3)
-    filled_c = ax3.contourf(lons, lats, data_label,levels=clevel, norm=norm,cmap=precip_colormap,linesytles=None)
-    ax3.set_xticks(np.arange(120, 123))
-    ax3.set_yticks(np.arange(22, 26))
-    ax3.tick_params('both', labelsize=16)
-    ax3.set_title('QPESUMS')
-    plt.savefig('tmp.png')
-    plt.close('all')
-    RGB_matrix = imageio.imread('tmp.png')
-    return RGB_matrix
-
-def plot_windy_5km(data_train,preds_test,data_label,time):
-
-        
-    font = {'family'     : 'DejaVu Sans Mono',
-            'weight'     : 'bold',
-            'size'       : 18
-            }
-    axes = {'titlesize'  : 18,
-            'titleweight': 'heavy',
-            'labelsize'  : 18,
-            'labelweight': 'bold'
-            }
-    mpl.rc('font', **font)  # pass in the font dict as kwargs
-    mpl.rc('axes', **axes)
-    #ax.add_geometries(adm1_shapes, ccrs.PlateCarree(),
-    #                  edgecolor='black', facecolor='gray', alpha=0.5)
-    latStart = 21; latEnd =26.55;#25.35
-    lonStart = 118.2; lonEnd = 123.35;
-    lat_5km = np.linspace(latStart,latEnd,112)
-    lon_5km = np.linspace(lonStart,lonEnd,104)
-    lons, lats = np.meshgrid(lon_5km, lat_5km)
-    plt.figure(figsize=(18,6))
-    plt.suptitle(time)
-    plt.rcParams['font.sans-serif'] = ['Microsoft JhengHei'] 
-    ax1 = plt.subplot(1, 3, 1)
-    # ax1 = plt.axes(projection=ccrs.PlateCarree())
-    # ss = np.sum(data_train,axis=2)
-    filled_c = ax1.contourf(lons, lats, data_train, levels=clevel, norm=norm,cmap=precip_colormap,linesytles=None)
- 
-    ax1.set_xticks(np.arange(120, 123))
-    ax1.set_yticks(np.arange(22, 26))
-    ax1.set_title('windy_EC')
-    ax1.tick_params('both', labelsize=16)
-
-    
-    ax2 = plt.subplot(1, 3, 2)
-    filled_c = ax2.contourf(lons, lats, preds_test.detach().numpy()  ,levels=clevel, norm=norm,cmap=precip_colormap,linesytles=None)    #
-    ax2.set_xticks(np.arange(120, 123))
-    ax2.set_yticks(np.arange(22, 26))
-    ax2.set_title('pred_rainfall')
-    ax2.tick_params('both', labelsize=16)
-    
-    
-    
-    ax3 = plt.subplot(1, 3, 3)
-    filled_c = ax3.contourf(lons, lats, data_label,levels=clevel, norm=norm,cmap=precip_colormap,linesytles=None)
+    filled_c = ax3.contourf(lons, lats, data_label[0,:,:],levels=clevel, norm=norm,cmap=precip_colormap,linesytles=None)
     ax3.set_xticks(np.arange(120, 123))
     ax3.set_yticks(np.arange(22, 26))
     ax3.tick_params('both', labelsize=16)
