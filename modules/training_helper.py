@@ -7,7 +7,7 @@ from modules.plot_generator import plot_windy
 
 def remove_outlier_and_nan(numpy_array, upper_bound=1000):
     numpy_array = np.nan_to_num(numpy_array, copy=False)
-    # numpy_array[numpy_array > upper_bound] = 0
+    numpy_array[numpy_array > upper_bound] = 0
     return numpy_array
 
 def output_sample_rainfall_chart(model, sample_data, summary_writer, epoch_index,plot_windy_size, device):

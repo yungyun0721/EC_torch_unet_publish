@@ -7,8 +7,8 @@ template:
       input: '/wk1/bcw817/data/Himawari-8/data_ready/Pacific/' ## h5file data folder
       label: '/wk1/bcw817/data/Himawari-8/data_ready_qperr/Pacific/'
     data_time_arg:
-      data_valid: ['2019','2021'] 
-      data_test: ['2023']
+      data_valid: ['2021'] 
+      data_test: ['2019','2023']
     batch_size: 20
     data_channel: [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]
 
